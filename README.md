@@ -1634,3 +1634,227 @@ DynamicProxyController:
 Processes JSON data for both request and response.
 Handles JSON conversion and errors properly.
 These changes ensure that your middleware handles JSON data correctly and can provide fallback responses in the proper format.
+
+
+give changes for postgress
+ChatGPT said:
+ChatGPT
+For PostgreSQL, you'll need to ensure that the request and response columns in the data_model table can handle JSON data. Here’s a guide to update your database schema and Java code accordingly:
+
+1. Update Database Schema
+Ensure your PostgreSQL table data_model has columns with the JSON type for request, response, and schema if needed. You can use the following SQL statement to update your schema:
+
+sql
+Copy code
+ALTER TABLE data_model
+    ALTER COLUMN request TYPE JSONB USING request::JSONB,
+    ALTER COLUMN response TYPE JSONB USING response::JSONB;
+This statement converts the existing columns to JSONB, which is a more efficient JSON storage format in PostgreSQL. If your table is already created with appropriate columns, ensure that these columns are set to handle JSONB.
+
+2. Update DataModel Class
+Ensure your DataModel class is prepared to handle JSON data correctly.
+
+DataModel.java
+java
+Copy code
+package com.example.middleware.model;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import javax.persistence.*;
+
+@Entity
+@Table(name = "data_model")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class DataModel {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String action;
+    private String url;
+
+    @Lob
+    @Column(columnDefinition = "jsonb")
+    private String request; // Store JSON as a String
+
+    @Lob
+    @Column(columnDefinition = "jsonb")
+    private String response; // Store JSON as a String
+
+    @Transient
+    private JsonNode requestNode; // In-memory representation
+
+    @Transient
+    private JsonNode responseNode; // In-memory representation
+}
+3. Update FallbackService Class
+Handle JSON data for PostgreSQL correctly:
+
+FallbackService.java
+java
+Copy code
+package com.example.middleware.service;
+
+import com.example.middleware.model.DataModel;
+import com.example.middleware.repository.DataModelRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.util.Optional;
+
+@Service
+public class FallbackService {
+
+    @Autowired
+    private DataModelRepository repository;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public void saveFallbackData(DataModel dataModel) {
+        try {
+            // Convert JsonNode to String
+            dataModel.setRequest(objectMapper.writeValueAsString(dataModel.getRequestNode()));
+            dataModel.setResponse(objectMapper.writeValueAsString(dataModel.getResponseNode()));
+        } catch (IOException e) {
+            e.printStackTrace();
+            // Handle JSON processing error
+        }
+        repository.save(dataModel);
+    }
+
+    public Optional<DataModel> getFallbackData(String action, String url, String request) {
+        Optional<DataModel> dataModel = repository.findByActionAndUrlAndRequest(action, url, request);
+        if (dataModel.isPresent()) {
+            DataModel model = dataModel.get();
+            try {
+                // Convert String back to JsonNode
+                model.setRequestNode(objectMapper.readTree(model.getRequest()));
+                model.setResponseNode(objectMapper.readTree(model.getResponse()));
+            } catch (IOException e) {
+                e.printStackTrace();
+                // Handle JSON parsing error
+            }
+        }
+        return dataModel;
+    }
+}
+4. Update DynamicProxyController Class
+Ensure JSON conversion is handled properly for PostgreSQL:
+
+DynamicProxyController.java
+java
+Copy code
+package com.example.middleware.controller;
+
+import com.example.middleware.model.DataModel;
+import com.example.middleware.service.BackendServiceDiscovery;
+import com.example.middleware.service.FallbackService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
+
+import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.util.Enumeration;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/proxy")
+public class DynamicProxyController {
+
+    @Autowired
+    private BackendServiceDiscovery serviceDiscovery;
+
+    @Autowired
+    private FallbackService fallbackService;
+
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @RequestMapping("/**")
+    public ResponseEntity<JsonNode> proxyRequest(
+            HttpServletRequest request,
+            @RequestBody(required = false) String body) {
+
+        // Construct the backend URL
+        String backendUrl = serviceDiscovery.getBaseUrl() + request.getRequestURI().replace("/proxy", "");
+
+        try {
+            // Attempt to forward the request
+            ResponseEntity<String> response = restTemplate.exchange(
+                    backendUrl,
+                    HttpMethod.valueOf(request.getMethod()),
+                    new HttpEntity<>(body, getHeaders(request)),
+                    String.class
+            );
+
+            JsonNode responseBody = objectMapper.readTree(response.getBody());
+            saveFallbackData(request, body, responseBody);
+            return ResponseEntity.ok(responseBody);
+        } catch (HttpClientErrorException | ResourceAccessException e) {
+            // Handle errors and fallback to response
+            System.err.println("Backend service error: " + e.getMessage());
+            return getFallbackResponse(request, body);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    private HttpHeaders getHeaders(HttpServletRequest request) {
+        HttpHeaders headers = new HttpHeaders();
+        Enumeration<String> headerNames = request.getHeaderNames();
+        while (headerNames.hasMoreElements()) {
+            String headerName = headerNames.nextElement();
+            headers.add(headerName, request.getHeader(headerName));
+        }
+        return headers;
+    }
+
+    private void saveFallbackData(HttpServletRequest request, String requestBody, JsonNode responseBody) {
+        DataModel dataModel = new DataModel();
+        dataModel.setAction(request.getMethod());
+        dataModel.setUrl(request.getRequestURI());
+        try {
+            dataModel.setRequest(objectMapper.writeValueAsString(objectMapper.readTree(requestBody)));
+            dataModel.setResponse(objectMapper.writeValueAsString(responseBody));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        fallbackService.saveFallbackData(dataModel);
+    }
+
+    private ResponseEntity<JsonNode> getFallbackResponse(HttpServletRequest request, String requestBody) {
+        Optional<DataModel> fallbackData = fallbackService.getFallbackData(
+                request.getMethod(),
+                request.getRequestURI(),
+                requestBody
+        );
+        return fallbackData.isPresent() ?
+                ResponseEntity.ok(fallbackData.get().getResponseNode()) :
+                ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(null);
+    }
+}
+Summary of Changes
+Database:
+
+Ensure columns for request and response are JSONB in PostgreSQL.
+Java Code:
+
+Updated DataModel to use String with JSONB type in PostgreSQL.
+Ensure FallbackService and DynamicProxyController handle JSON conversion properly using Jackson.
+By implementing these changes, you ensure that the middleware can properly handle JSON data with PostgreSQL and return the appropriate responses based on the availability of fallback data.
