@@ -117,15 +117,17 @@ This will set up both your Spring Boot application and PostgreSQL container toge
 
 
 ```
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/mainbackend
-    username: your-username
-    password: your-password
-    driver-class-name: org.postgresql.Driver
-  jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
-    hibernate:
-      ddl-auto: update
-    show-sql: true
+# PostgreSQL Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/mainbackend
+spring.datasource.username=your-username
+spring.datasource.password=your-password
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# Hibernate Dialect
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+
+# Hibernate Settings
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
 ```
