@@ -114,3 +114,18 @@ Build and run the containers:
 docker-compose up --build
 ```
 This will set up both your Spring Boot application and PostgreSQL container together.
+
+
+```
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mainbackend
+    username: your-username
+    password: your-password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+```
