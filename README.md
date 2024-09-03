@@ -1,4 +1,7 @@
 Powered by the latest technology, this tool adapts seamlessly to diverse development needs. It offers flexible response management by archiving responses when services are operational, generating AI-driven stubs when data is missing, or allowing manual input through a dedicated UI. This enhances efficiency, accelerates development, and ensures reliable response handling for varied testing scenarios.
+
+
+The "API Resilience Tool" is an adaptive, technology-agnostic solution designed for seamless integration across various development and testing environments, ensuring reliable and efficient API simulation.
 # Spring Boot Backend with PostgreSQL Using Docker
 
 This guide provides steps to configure a Spring Boot backend application to use a PostgreSQL database running in a Docker container instead of the default H2 database.
