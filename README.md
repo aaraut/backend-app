@@ -9,7 +9,7 @@ expanding support to SOAP and GraphQL, incorporating user feedback for enhanced 
 # Spring Boot Backend with PostgreSQL Using Docker
 
 This guide provides steps to configure a Spring Boot backend application to use a PostgreSQL database running in a Docker container instead of the default H2 database.
-
+In complex microservice architectures, it plays a critical role in optimizing operations and can boost efficiency by 60-70%.
 ## Prerequisites
 
 - Docker installed on your machine
